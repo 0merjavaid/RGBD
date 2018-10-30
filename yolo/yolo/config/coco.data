@@ -1,0 +1,6 @@
+classes= 2
+train=data/coco/5.6.txt
+valid=/home/kjaved/Desktop/test.txt
+names=data/coco.names
+backup=backup/
+eval=coco
