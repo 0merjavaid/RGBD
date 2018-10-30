@@ -7,132 +7,32 @@ import cv2
 import yolo
 from operator import itemgetter
 
-# Create a pipeline
-pipeline = rs.pipeline()
+from depth_utils import *
 
-# Create a config and configure the pipeline to stream
-#  different resolutions of color and depth streams
-config = rs.config()
-
-config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
-
-# Start streaming
-profile = pipeline.start(config)
-
-# Getting the depth sensor's depth scale (see rs-align example for explanation)
-depth_sensor = profile.get_device().first_depth_sensor()
-depth_scale = depth_sensor.get_depth_scale()
-print("Depth Scale is: " , depth_scale)
-
-# We will be removing the background of objects more than
-#  clipping_distance_in_meters meters away
-clipping_distance_in_meters = 1 #1 meter
-clipping_distance = clipping_distance_in_meters / depth_scale
-
-# Create an align object
-# rs.align allows us to perform alignment of depth frames to others frames
-# The "align_to" is the stream type to which we plan to align depth frames.
-align_to = rs.stream.color
-align = rs.align(align_to)
-
-frames = pipeline.wait_for_frames()
-# frames.get_depth_frame() is a 640x360 depth image
-aligned_frames = align.process(frames)
-
-# Get aligned frames
-aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
-print('Aligned Depth Frame')
-print(aligned_depth_frame)
-color_frame = aligned_frames.get_color_frame()
-
-depth_image = np.asanyarray(aligned_depth_frame.get_data())
-color_image = np.asanyarray(color_frame.get_data())
+# Setup depth stream
+pipeline, config = setup_pipeline()
+align = align_frames(pipeline, config)
+color_frame, aligned_depth_frame = get_aligned_frames(pipeline, align)
+color_image, depth_image = rgbd_to_numpy(color_frame, aligned_depth_frame)
 
 # Init YOLO model
-YOLO=yolo.YOLO()
-
-def run(bboxes1, bboxes2):
-    x11, y11, x12, y12 = np.split(bboxes1, 4, axis=1)
-    x21, y21, x22, y22 = np.split(bboxes2, 4, axis=1)
-    xA = np.maximum(x11, np.transpose(x21))
-    yA = np.maximum(y11, np.transpose(y21))
-    xB = np.minimum(x12, np.transpose(x22))
-    yB = np.minimum(y12, np.transpose(y22))
-    interArea = np.maximum((xB - xA + 1), 0) * np.maximum((yB - yA + 1), 0)
-    boxAArea = (x12 - x11 + 1) * (y12 - y11 + 1)
-    boxBArea = (x22 - x21 + 1) * (y22 - y21 + 1)
-    iou = interArea / (boxAArea + np.transpose(boxBArea) - interArea)
-    return iou
-
-# def get_min_dists(hand_centroids, item_centroids):
-#     print('Hand Centroids:')
-#     print(hand_centroids)
-#     print('item_centroids')
-#     print(item_centroids)
-#     distances = []
-#     for hand_centroid in hand_centroids:
-#         distance_hand = []
-#         p1 = hand_centroid[2]
-#         for idx, centroid in enumerate(item_centroids):
-#             p2 = centroid[2]
-#             dist = abs(p2 - p1)
-#             #dist = np.sqrt(squared_dist)
-#             print('dist')
-#             print(dist)
-#             distance_hand.append(dist)
-#             print('distance hand')
-#             print(distance_hand)
-#         distances.append(distance_hand)
-#     distances = np.array(distances)
-#     print('distances')
-#     print(distances.shape)
-#     print(distances)
-#     min_distance = np.amin(distances,axis=1,keepdims=True)
-#     min_index = np.argmin(distances,axis=1)
-
-#     return min_index, min_distance
-
-# def get_min_dist(hand_centroids, item_centroids):
-#     distances = []
-#     hand_centroid = hand_centroids[0]
-#     p1 = np.int16(hand_centroid[2])
-#     print(type(p1))
-#     for idx, centroid in enumerate(item_centroids):
-#         p2 = np.int16(centroid[2])
-#         print(p2,p1)
-#         print(p2 - p1)
-#         print(type(p1))
-#         dist = abs(p2 - p1)
-#         distances.append([idx, dist])
-#     print('Unsoreted distances')
-#     print(distances)
-#     distances = sorted(distances, key=itemgetter(1))
-#     print('Sorted Distances')
-#     print(distances)
-#     val = distances[0]
-#     return val[0], val[1]
+YOLO = yolo.YOLO()
 
 try:
     while True:
         # Get frameset of color and depth
-        frames = pipeline.wait_for_frames()
-        # frames.get_depth_frame() is a 640x360 depth image
+        color_frame, aligned_depth_frame = get_aligned_frames(pipeline, align)
         
-        # Align the depth frame to color frame
-        aligned_frames = align.process(frames)
-        
-        # Get aligned frames
-        aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
-        color_frame = aligned_frames.get_color_frame()
-
-
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:
             continue
+
+        color_image, depth_image = rgbd_to_numpy(color_frame, aligned_depth_frame)
         
-        depth_image = np.asanyarray(aligned_depth_frame.get_data())
-        color_image = np.asanyarray(color_frame.get_data())
+
+        print(color_image.shape)
+        print(depth_image.shape)
+        print('Hello')
         color_image_1 = color_image.copy()
 
         #rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
