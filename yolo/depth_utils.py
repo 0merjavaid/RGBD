@@ -2,6 +2,8 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2
 
+#from unet.utils import *
+
 
 def setup_pipeline(img_dims=(1280, 720), depth_dims=(848, 480), fps=30):
     """
@@ -141,7 +143,7 @@ def get_median_depth(box, depth_frame):
     assert isinstance(depth_frame, np.ndarray)
 
     x1, y1, x2, y2 = box
-    depth_crop = depth_image[y1:y2, x1:x2]
+    depth_crop = depth_frame[y1:y2, x1:x2]
     median_depth = np.median(depth_crop.reshape(-1))
     return median_depth
     
@@ -157,13 +159,12 @@ def draw_boundingBox(image, box, text='', box_color=(0,255,0), text_color= (0,0,
     :param thickness: thickness of bounding box, default = 2
     :return: np.ndarray containing the iou
     """
-
     assert isinstance(image, np.ndarray)
-    assert isinstance(box, np.nadrray)
-    assert box.shape == (1,4)
+    assert isinstance(box, np.ndarray)
+    assert box.shape == (4,)
     assert len(box_color) == 3
     assert len(text_color) == 3
-    assert isinstance(thickness, int)
+    assert isinstance(box_thickness, int)
     assert box_thickness > 0
 
     cv2.putText(image,str(text), (box[0], box[1]), cv2.FONT_HERSHEY_SIMPLEX, 
@@ -199,7 +200,7 @@ def get_depth_diffs(hand, items_list):
 
 
 
-def get_item_of_interest(hand_list, items_list, threshold=150):
+def get_item_of_interest(hand_list, items_list, threshold=50):
     """
     Extracts Item of Interest given hand and multiple items
     :param hand_list: List of tuples (median_depth, box)

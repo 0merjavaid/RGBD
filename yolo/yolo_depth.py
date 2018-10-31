@@ -2,7 +2,7 @@
 import yolo
 from depth_utils import *
 
-threshold = 150
+threshold = 50
 
 # Setup depth stream
 pipeline, config = setup_pipeline()
@@ -49,7 +49,7 @@ try:
 
         # All hands and items are detected
         if (len(hand_centroids) != 0) and (len(item_centroids) != 0):
-            final_box = get_item_of_interest(hand_centroids, item_centroids, threshold)
+            final_box = get_item_of_interest(hand_centroids, item_centroids, threshold=threshold)
             if final_box is not None:
                 color_image_ioi = draw_boundingBox(color_image_ioi, final_box, box_color=(0,0,0), box_thickness=4)              
 
