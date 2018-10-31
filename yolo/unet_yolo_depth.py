@@ -1,6 +1,7 @@
 # Import yolo for object detection
 import yolo
 from depth_utils import *
+import unet
 
 def main():
     threshold = 50
@@ -27,7 +28,8 @@ def main():
             color_image_ioi = color_image.copy()
             
             # Apply YOLO to this image and get bounding boxes
-            hands, items = YOLO.get_item_of_interest(color_image)
+            _, items= YOLO.get_item_of_interest(color_image)
+            hands, seg_mask = segment_hands(color_image)
             result = run(hands,items)
             
             # get hand centroid

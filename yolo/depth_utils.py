@@ -1,6 +1,7 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2
+import unet.UNET as unet
 
 #from unet.utils import *
 
@@ -243,6 +244,17 @@ def show_image(window_name, image):
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.imshow(window_name, image)
     cv2.waitKey(1)
+
+def segment_hands(image ,area_thres=5000):
+    """
+    Retuns list of hands bounding boxes and segmentation mask
+    :param image: np.ndarray image
+    :param area_thres: Area threshold to consider bounding box a hand 
+    """
+    seg_model = unet.UNET()
+    hands, seg_mask = seg_model.get_hands(image, area_thres)
+    return hands, seg_mask
+
 
 
 
