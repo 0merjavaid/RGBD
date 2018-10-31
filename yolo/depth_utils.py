@@ -1,5 +1,6 @@
 import pyrealsense2 as rs
 import numpy as np
+import cv2
 
 
 def setup_pipeline(img_dims=(1280, 720), depth_dims=(848, 480), fps=30):
@@ -61,6 +62,7 @@ def align_frames(pipeline, config, clip_dist = 1):
     align = rs.align(align_to)
     return align
 
+
 def get_aligned_frames(pipeline, align):
     """
     Get aligned color and depth frames
@@ -113,4 +115,133 @@ def run(bboxes1, bboxes2):
     boxBArea = (x22 - x21 + 1) * (y22 - y21 + 1)
     iou = interArea / (boxAArea + np.transpose(boxBArea) - interArea)
     return iou
+
+
+def get_hand_of_interest(hands, result):
+    """
+    Gives hand that has max overlap with the item 
+    :param hands: numpy.ndarray of bounding boxes containing hands
+    :param result: np.ndarray containing iou of all hands with items
+    :return: Hand that has max overlap with any of the items
+    """
+    assert isinstance(hands, np.ndarray)
+    assert isinstance(result, np.ndarray)
+
+    return hands[np.unravel_index(result.argmax(), result.shape)[0]]
+    
+
+def get_median_depth(box, depth_frame):
+    """
+    Calcuates the median depth associated with hand boundingbox
+    :param box: np.ndarry bounding box 
+    :praram depth_frame: numpy.ndarray depth image
+    :return: median depth associated with hand boundingbox
+    """
+    assert isinstance(box, np.ndarray)
+    assert isinstance(depth_frame, np.ndarray)
+
+    x1, y1, x2, y2 = box
+    depth_crop = depth_image[y1:y2, x1:x2]
+    median_depth = np.median(depth_crop.reshape(-1))
+    return median_depth
+    
+
+def draw_boundingBox(image, box, text='', box_color=(0,255,0), text_color= (0,0,0), box_thickness=2):
+    """
+    Draw a bounding box around on image
+    :param image: np.ndarray to draw bounding box
+    :param box: np.ndarray of bounding coordinates (x1,y1,x2,y2)
+    :param text: text to put on bounding box, default=''
+    :param box_color: tuple contating rgb color for bounding box, default = (0,255,0)
+    :param text_color: tuple containing rgb color for text, default = (0,0,0)
+    :param thickness: thickness of bounding box, default = 2
+    :return: np.ndarray containing the iou
+    """
+
+    assert isinstance(image, np.ndarray)
+    assert isinstance(box, np.nadrray)
+    assert box.shape == (1,4)
+    assert len(box_color) == 3
+    assert len(text_color) == 3
+    assert isinstance(thickness, int)
+    assert box_thickness > 0
+
+    cv2.putText(image,str(text), (box[0], box[1]), cv2.FONT_HERSHEY_SIMPLEX, 
+               1,text_color,2)
+    cv2.rectangle(image,(box[0],box[1]),(box[2],box[3]),box_color,box_thickness)
+    return image
+
+def get_depth_diffs(hand, items_list):
+    """
+    Calculates difference in depth between hand and each item
+    :param hand: tuple containing (hand_depth, hand_box)
+    :param items_list: List of tuples (item_depth, item_box)
+    :return diffs: list containg diff in depth between hand with items
+    """
+    assert isinstance(hand, tuple)
+    assert isinstance(items_list, list)
+
+    diffs = []
+    hand_depth = hand[0]
+    hand_box = hand[1]
+    # Iterate over a;; items to find distance with hand
+    for item in items_list:
+        item_depth = item[0]
+        item_box = item[1]
+
+        # Calculate IOU of hand with item
+        iou = run(np.array([hand_box]), np.array([item_box]))
+
+        if iou > 0:
+            depth_diff = abs(hand_depth - item_depth)
+            diffs.append((item_box, depth_diff))
+    return diffs
+
+
+
+def get_item_of_interest(hand_list, items_list, threshold=150):
+    """
+    Extracts Item of Interest given hand and multiple items
+    :param hand_list: List of tuples (median_depth, box)
+    :param items_list: List of tuples (median_depth, box)
+    :param threshold: depth threshold, default = 150 
+    :return final_box: final_box containing the item_of_interest
+    """
+    assert isinstance(hand_list, list)
+    assert isinstance(items_list, list)
+
+    # assuming only one hand at index 0
+    hand = hand_list[0]
+
+    hand_depth = hand[0]
+    hand_box = hand[1]
+
+    diffs = get_depth_diffs(hand, items_list)
+    
+    item_boxes = sorted(diffs, key=lambda x: x[1])
+
+    final_box = None
+    if len(item_boxes) > 0:
+        final_tuple = item_boxes[0]
+        final_depth = final_tuple[1]
+        if final_depth < threshold:
+            final_box = final_tuple[0]
+
+    return final_box
+
+def show_image(window_name, image):
+    """
+    Displays image in a window
+    :param window_name: window name as string
+    :param image: np.ndarray image
+    """
+
+    assert isinstance(window_name, str)
+    assert isinstance(image, np.ndarray)
+
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, image)
+    cv2.waitKey(1)
+
+
 

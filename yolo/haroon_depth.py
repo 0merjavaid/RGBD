@@ -1,13 +1,8 @@
-import pyrealsense2 as rs
-# Import Numpy for easy array manipulation
-import numpy as np
-# Import OpenCV for easy image rendering
-import cv2
 # Import yolo for object detection
 import yolo
-from operator import itemgetter
-
 from depth_utils import *
+
+threshold = 150
 
 # Setup depth stream
 pipeline, config = setup_pipeline()
@@ -36,76 +31,29 @@ try:
         
         # get hand centroid
         hand_centroids = []
-        if len(hands) > 0 and result.shape[1] != 0:
-            hand_of_interest = hands[np.unravel_index(result.argmax(), result.shape)[0]]
-        
+        if len(hands) > 0 and result.shape[1] != 0:         
+            hand_of_interest = get_hand_of_interest(hands, result)
             if hand_of_interest is not None:
-                x1, y1, x2, y2 = hand_of_interest
-                depth_crop = depth_image[y1:y2, x1:x2]
-
-                median_depth_hand = np.median(depth_crop.reshape(-1))
+                median_depth_hand = get_median_depth(hand_of_interest, depth_image)
                 hand_centroids.append((median_depth_hand, hand_of_interest))
-                cv2.putText(color_image,'Depth:' + str(median_depth_hand), 
-                                (hand_of_interest[0],hand_of_interest[1]), cv2.FONT_HERSHEY_SIMPLEX, 
-                               1,
-                                (255,255,255),
-                                2)
-            cv2.rectangle(color_image,(hand_of_interest[0],hand_of_interest[1]),(hand_of_interest[2],hand_of_interest[3]),(0,255,0),2)
+                color_image = draw_boundingBox(color_image, hand_of_interest, str('Depth: ' + str(median_depth_hand)))
         
-        # get item centroid
+        # Get Item centroid
         item_centroids = []    
-        for box in items: 
+        for box in items:
             if box is not None:
-                x1, y1, x2, y2 = box
-                depth_crop = depth_image[y1:y2, x1:x2]
-                median_depth_item = np.median(depth_crop.reshape(-1))
+                median_depth_item = get_median_depth(box, depth_image)
                 item_centroids.append((median_depth_item, box))
-                cv2.putText(color_image,'Depth:' + str(median_depth_item), 
-                                (box[0],box[1]), cv2.FONT_HERSHEY_SIMPLEX, 
-                                1,
-                                (255,255,255),
-                                2)
-                cv2.rectangle(color_image,(box[0],box[1]),(box[2],box[3]),(0,0,255),4)
+                color_image = draw_boundingBox(color_image, box, str('Depth: ' + str(median_depth_item)), box_color=(255,0,0))
         
+
         # All hands and items are detected
         if (len(hand_centroids) != 0) and (len(item_centroids) != 0):
-            hand_depth = hand_centroids[0][0]
-            hand_box = hand_centroids[0][1]
-            diffs = []
-            print("Item Centroids: ", item_centroids)
-            for item in item_centroids:
-                item_depth = item[0]
-                item_box = item[1]
-                print("Hand Box: ", hand_box)
-                print("Item Box: ", item_box)
-                iou = run(np.array([hand_box]), np.array([item_box]))
-                print("IOU :", iou)
-                if iou > 0:
-                    depth_diff = abs(hand_depth - item_depth)
-                    diffs.append((item_box, depth_diff))
+            final_box = get_item_of_interest(hand_centroids, item_centroids, threshold)
+            if final_box is not None:
+                color_image_ioi = draw_boundingBox(color_image_ioi, final_box, box_color=(0,0,0), box_thickness=4)              
 
-            item_box = sorted(diffs, key=lambda x: x[1])
-            print("Item Box: ", item_box)
-            if len(item_box) > 0:
-                final_tuple = item_box[0]
-                depth = final_tuple[1]
-                if depth < 150:
-                    final_box = final_tuple[0]
-                    print("Final Box: ", final_box)
-                    cv2.rectangle(color_image_ioi,(final_box[0],final_box[1]),(final_box[2], final_box[3]),(0,0,0),2)        
-
-
-        #cv2.imshow('Color',rgb_image)
-        cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('image', 1280,720)
-        cv2.imshow('image',color_image)
-        cv2.waitKey(1)
-
-        #cv2.imshow('Imp',color_image_ioi)
-        cv2.namedWindow('ioi', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('ioi',1280, 720)
-        cv2.imshow('ioi',color_image_ioi)
-        cv2.waitKey(1)
-
+        show_image('yolo', color_image)
+        show_image('ioi', color_image_ioi)
 finally:
     pipeline.stop()
