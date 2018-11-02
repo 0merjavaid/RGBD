@@ -131,6 +131,20 @@ def get_hand_of_interest(hands, result):
     assert isinstance(result, np.ndarray)
 
     return hands[np.unravel_index(result.argmax(), result.shape)[0]]
+
+
+def get_centroid(box):
+    """
+    Calculates centroid of bounding box
+    :param box: np.ndarray of shape (4,)
+    :return centroid: Returns centroid of the bounding box
+    """
+
+    assert isinstance(box, np.ndarray)
+    assert box.shape == (4,)
+
+    x1, y1, x2, y2 = box
+    return (int((x1 + x2)/2), int((y1 + y2)/2)) 
     
 
 def get_median_depth(box, depth_frame):
@@ -173,6 +187,7 @@ def draw_boundingBox(image, box, text='', box_color=(0,255,0), text_color= (0,0,
     cv2.rectangle(image,(box[0],box[1]),(box[2],box[3]),box_color,box_thickness)
     return image
 
+
 def get_depth_diffs(hand, items_list):
     """
     Calculates difference in depth between hand and each item
@@ -200,6 +215,48 @@ def get_depth_diffs(hand, items_list):
     return diffs
 
 
+def distance(box1, box2):
+    """
+    Calculates 3d distance between 2 bounding boxes
+    :param box1: tuple of (x,y,z) for box 1
+    :param box2: tuple of (x,y,z) for box 2
+    :return distance: 3d distance between 2 boxes
+    """
+
+    assert isinstance(box1, (tuple,list))
+    assert isinstance(box2, (tuple, list))
+
+    x1, y1, z1 = box1
+    x2, y2, z2 = box2
+    return np.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
+
+
+def get_depth_diffs_2(hand, items_list):
+    """
+    Calculates difference in depth between hand and each item
+    :param hand: tuple containing (hand_depth, hand_box)
+    :param items_list: List of tuples (item_depth, item_box)
+    :return diffs: list containg diff in depth between hand with items
+    """
+    assert isinstance(hand, tuple)
+    assert isinstance(items_list, list)
+
+    diffs = []
+    hand_depth = hand[0]
+    hand_box = hand[1]
+    # Iterate over all items to find distance with hand
+    for item in items_list:
+        item_depth = item[0]
+        item_box = item[1]
+
+        # Calculate IOU of hand with item
+        iou = run(np.array([hand_box]), np.array([item_box]))
+
+        if iou > 0:
+            depth_diff = distance(hand_depth, item_depth)
+            diffs.append((item_box, depth_diff))
+    return diffs
+
 
 def get_item_of_interest(hand_list, items_list, threshold=50):
     """
@@ -218,8 +275,7 @@ def get_item_of_interest(hand_list, items_list, threshold=50):
     hand_depth = hand[0]
     hand_box = hand[1]
 
-    diffs = get_depth_diffs(hand, items_list)
-    
+    diffs = get_depth_diffs(hand, items_list)    
     item_boxes = sorted(diffs, key=lambda x: x[1])
 
     final_box = None
@@ -228,8 +284,37 @@ def get_item_of_interest(hand_list, items_list, threshold=50):
         final_depth = final_tuple[1]
         if final_depth < threshold:
             final_box = final_tuple[0]
-
     return final_box
+
+
+def get_item_of_interest_2(hand_list, items_list, threshold=50):
+    """
+    Extracts Item of Interest given hand and multiple items
+    :param hand_list: List of tuples (median_depth, box)
+    :param items_list: List of tuples (median_depth, box)
+    :param threshold: depth threshold, default = 150 
+    :return final_box: final_box containing the item_of_interest
+    """
+    assert isinstance(hand_list, list)
+    assert isinstance(items_list, list)
+
+    # assuming only one hand at index 0
+    hand = hand_list[0]
+
+    hand_depth = hand[0]
+    hand_box = hand[1]
+
+    diffs = get_depth_diffs_2(hand, items_list)    
+    item_boxes = sorted(diffs, key=lambda x: x[1])
+
+    final_box = None
+    if len(item_boxes) > 0:
+        final_tuple = item_boxes[0]
+        final_depth = final_tuple[1]
+        if final_depth < threshold:
+            final_box = final_tuple[0]
+    return final_box
+
 
 def show_image(window_name, image):
     """
@@ -275,12 +360,50 @@ def mask_ioi(depth_map, box, thres = 50):
     mask = np.zeros_like(depth_map)
     mask[y1:y2, x1:x2] = depth_map[y1:y2, x1:x2]
 
-    mask[mask > (median_depth + threshold)] = 0
-    mask[mask < (median_depth - threshold)] = 0
+    mask[mask > (median_depth + thres)] = 0
+    mask[mask < (median_depth - thres)] = 0
 
     mask[mask !=0 ] = 1
-
     return mask
+
+def get_ious(hand, items_list):
+    ious = []
+    hand_depth = hand[0]
+    hand_box = hand[1]
+    # Iterate over all items to find distance with hand
+    for item in items_list:
+        item_depth = item[0]
+        item_box = item[1]
+        print(hand_box.shape)
+        print(item_box.shape)
+        # Calculate IOU of hand with item
+        iou = run(np.array([hand_box]), np.array([item_box]))
+        if iou > 0:
+            ious.append((item_box, iou))
+
+    return ious
+
+
+def get_ioi(hands_list, items_list):
+    print("hands_list", hands_list)
+    hand = hands_list[0]
+    # hand_depth = hand[0]
+    # hand_box = hand[1]
+    # print('hand_box', hand_box)
+
+    ious = get_ious(hand, items_list)
+    item_boxes = sorted(ious, key=lambda x: x[1])
+
+    final_box = None
+    if len(item_boxes) > 0:
+        final_tuple = item_boxes[-1]
+        final_depth = final_tuple[1]
+        final_box = final_tuple[0]
+
+    return final_box
+
+
+
 
 
 
