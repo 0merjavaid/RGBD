@@ -35,8 +35,6 @@ class YOLO:
             print ("YOlO path Not found")
             return False
 
-        
-
         # Set up model
         model = Darknet("yolo/config/yolov3.cfg", img_size=(416,416))
         model.load_weights(model_path)
@@ -71,7 +69,7 @@ class YOLO:
         with torch.no_grad():
            t0=time.time()
            detections = self.model(im1) 
-           detections = non_max_suppression(detections, 80, 0.4, 0.45)
+           detections = non_max_suppression(detections, 80, 0.5, 0.45)
           
         hands=[]
         items=[]

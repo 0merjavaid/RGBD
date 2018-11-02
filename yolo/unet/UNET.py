@@ -13,15 +13,15 @@ class UNET:
         self.img_size =  img_size
         self.batch_size = batch_size
         self.transforms = get_transforms(img_size)
-        self.model = self.get_unet(model_path)
+        self.get_unet(model_path)
 
     def get_unet(self, model_path):
         """
         Creates model for semantic segmentation
         """
-        model = get_segmentation_model(model_path)
-        model.eval()
-        return model
+        self.model = get_segmentation_model(model_path)
+        self.model.eval()
+        
 
     def get_hands(self, frame, area_thres):
         """
@@ -32,13 +32,14 @@ class UNET:
         assert isinstance(frame, np.ndarray)
         assert isinstance(area_thres, (int, float))
         hands = []
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         seg_mask = segment_hand(frame, self.transforms, self.model)
         contours = get_contours(seg_mask)
         for contour in contours:
             area = get_contour_area(contour)
             if area > area_thres:
                 (x,y,w,h) = cv2.boundingRect(contour)
-                hands.append((x, y, w, h))
+                hands.append((x, y, x+w, y+h))
         return np.array(hands).reshape(-1,4), seg_mask
 
 

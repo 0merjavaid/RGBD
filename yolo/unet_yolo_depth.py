@@ -2,6 +2,7 @@
 import yolo
 from depth_utils import *
 import unet
+import time
 
 def main():
     threshold = 50
@@ -30,6 +31,8 @@ def main():
             # Apply YOLO to this image and get bounding boxes
             _, items= YOLO.get_item_of_interest(color_image)
             hands, seg_mask = segment_hands(color_image)
+            
+
             result = run(hands,items)
             
             # get hand centroid
@@ -55,9 +58,10 @@ def main():
                 final_box = get_item_of_interest(hand_centroids, item_centroids, threshold=threshold)
                 if final_box is not None:
                     color_image_ioi = draw_boundingBox(color_image_ioi, final_box, box_color=(0,0,0), box_thickness=4)              
-
-            show_image('yolo', color_image)
+            #seg_mask[seg_mask == 1] = 255
+            #show_image('yolo', color_image)
             show_image('ioi', color_image_ioi)
+            show_image('Segmentation Mask', seg_mask)
     finally:
         pipeline.stop()
 

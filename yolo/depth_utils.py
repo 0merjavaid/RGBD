@@ -245,7 +245,8 @@ def show_image(window_name, image):
     cv2.imshow(window_name, image)
     cv2.waitKey(1)
 
-def segment_hands(image ,area_thres=5000):
+
+def segment_hands(image, area_thres=1000):
     """
     Retuns list of hands bounding boxes and segmentation mask
     :param image: np.ndarray image
@@ -255,6 +256,31 @@ def segment_hands(image ,area_thres=5000):
     hands, seg_mask = seg_model.get_hands(image, area_thres)
     return hands, seg_mask
 
+
+def mask_ioi(depth_map, box, thres = 50):
+    """
+    Create a segmentation mask for item within the box
+    :param image: np.ndarray rgb image
+    :param depth_map: np.ndarray containing single channel depth map
+    :param box: np.ndarray of bounding coordinates (x1,y1,x2,y2)
+    :return depth_mask: mask 
+    """
+    
+    assert isinstance(depth_map, np.ndarray)
+    assert isinstance(box, np.ndarray)
+
+    x1,y1,x2,y2 = box
+    median_depth = get_median_depth(box, depth_map)
+    
+    mask = np.zeros_like(depth_map)
+    mask[y1:y2, x1:x2] = depth_map[y1:y2, x1:x2]
+
+    mask[mask > (median_depth + threshold)] = 0
+    mask[mask < (median_depth - threshold)] = 0
+
+    mask[mask !=0 ] = 1
+
+    return mask
 
 
 

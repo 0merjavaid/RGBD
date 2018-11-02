@@ -3,7 +3,7 @@ import yolo
 from depth_utils import *
 
 def main():
-    threshold = 50
+    threshold = 100
 
     # Setup depth stream
     pipeline, config = setup_pipeline()
@@ -16,6 +16,8 @@ def main():
 
     try:
         while True:
+            import time
+            start = time.time()
             # Get frameset of color and depth
             color_frame, aligned_depth_frame = get_aligned_frames(pipeline, align)
             
@@ -53,7 +55,7 @@ def main():
                 final_box = get_item_of_interest(hand_centroids, item_centroids, threshold=threshold)
                 if final_box is not None:
                     color_image_ioi = draw_boundingBox(color_image_ioi, final_box, box_color=(0,0,0), box_thickness=4)              
-
+            print(time.time() - start)
             show_image('yolo', color_image)
             show_image('ioi', color_image_ioi)
     finally:

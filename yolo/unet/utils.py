@@ -187,7 +187,7 @@ def segment_hand(image, transform, seg_model):
     :return: binary segmentation mask
     """
     img_height, img_width, _ = image.shape
-
+    
     image = to_PIL(image)
     # Image to feed into the model
     image = transform(image)
@@ -198,9 +198,9 @@ def segment_hand(image, transform, seg_model):
     seg_mask = seg_mask.cpu().detach().numpy().squeeze(0)
     seg_mask[seg_mask > 0] = 1
     seg_mask[seg_mask < 0] = 0
-
+    
     # Resize to captured image
-    seg_mask = cv2.resize(seg_mask, (img_width, img_height))
+    seg_mask = cv2.resize(seg_mask, (img_width, img_height)) 
     return seg_mask
 
 
