@@ -5,10 +5,14 @@ import numpy as np
 from torchvision import models, transforms
 
 import pyrealsense2 as rs
+import math
 from unet import Unet34
 
-IMAGE_WIDTH = 1280
-IMAGE_HEIGHT = 720
+RGB_IMAGE_WIDTH = 1280
+RGB_IMAGE_HEIGHT = 720
+
+DEPTH_IMAGE_WIDTH = 848
+DEPTH_IMAGE_HEIGHT = 480
 FPS = 30
 
 
@@ -81,11 +85,76 @@ def draw_contours(image, contours):
     """
     assert isinstance(image, np.ndarray), 'Image should be a numpy array'
     x, y, w, h = 0, 0, 0, 0
+    hand_contour = None
     for contour in contours:
         area = get_contour_area(contour)
         if area > 10000:
             x, y, w, h = draw_rect_around_contour(image, contour)
-    return x, y, w, h
+            hand_contour = np.array(contour)
+    return np.array([x, y, w, h]), hand_contour
+
+
+def get_filtered_ioi(ioi_candidates, point):
+    for ioi_candidate in ioi_candidates:
+        print (point, "point", type(point))
+        if cv2.pointPolygonTest(ioi_candidate, point, False) > 0:
+            return ioi_candidate
+
+
+def draw_ioi(image, contour):
+    mask = np.zeros_like(image)
+    print (contour)
+    if contour is not None:
+        cv2.drawContours(mask, [contour], -1, (1, 1, 1), -1)
+
+    return mask
+
+
+def get_median_depth(box, depth_frame):
+    """
+    Calcuates the median depth associated with hand boundingbox
+    :param box: np.ndarry bounding box 
+    :praram depth_frame: numpy.ndarray depth image
+    :return: median depth associated with hand boundingbox
+    """
+    assert isinstance(box, np.ndarray)
+    assert isinstance(depth_frame, np.ndarray)
+
+    x1, y1, x2, y2 = box
+    depth_crop = depth_frame[y1:y2, x1:x2]
+    median_depth = np.median(depth_crop.reshape(-1))
+    return median_depth
+
+
+def get_mask_ioi(depth_map, box, thres=50, hand_contour=None):
+    """
+    Create a segmentation mask for item within the box
+    :param image: np.ndarray rgb image
+    :param depth_map: np.ndarray containing single channel depth map
+    :param box: np.ndarray of bounding coordinates (x1,y1,x2,y2)
+    :return depth_mask: mask 
+    """
+
+    assert isinstance(depth_map, np.ndarray)
+    assert isinstance(box, np.ndarray)
+
+    x1, y1, x2, y2 = box
+    median_depth = get_median_depth(box, depth_map)
+
+    mask_image = depth_map.copy()
+
+    if math.isnan(median_depth):
+        return np.zeros_like(mask_image)
+
+    mask_image[mask_image > (median_depth+thres)] = 0
+    mask_image[mask_image < (median_depth-thres)] = 0
+    mask_image[mask_image != 0] = 1
+    if hand_contour is not None:
+        hand_contour = hand_contour.reshape(-1, 2)
+        y_min = np.min(hand_contour[:, 1])
+        mask_image[:y_min, :] = 0
+
+    return mask_image
 
 
 def draw_rect_around_contour(image, contour):
@@ -101,7 +170,7 @@ def draw_rect_around_contour(image, contour):
 
     (x, y, w, h) = cv2.boundingRect(contour)
     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    return x, y, w, h
+    return x, y, w+x, h+y
 
 
 def get_depth_pipeline():
@@ -117,8 +186,10 @@ def get_depth_pipeline():
     print('Configuring Pipeline...')
     config = rs.config()
 
-    config.enable_stream(rs.stream.depth, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.z16, FPS)
-    config.enable_stream(rs.stream.color, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.bgr8, FPS)
+    config.enable_stream(rs.stream.depth, DEPTH_IMAGE_WIDTH,
+                         DEPTH_IMAGE_HEIGHT, rs.format.z16, FPS)
+    config.enable_stream(rs.stream.color, RGB_IMAGE_WIDTH,
+                         RGB_IMAGE_HEIGHT, rs.format.bgr8, FPS)
     # Start streaming
     print('Starting Stream...')
     profile = pipeline.start(config)
@@ -216,9 +287,10 @@ def mask_frame(image, mask):
     mask[mask == 0] = 1
 
     # segmentation will display final output
-    segmentation = image
-    segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB)
+    segmentation = image.copy()
+    segmentation = cv2.cvtColor(segmentation, cv2.COLOR_BGR2RGB).astype(float)
 
     segmentation[:, :, 0] = segmentation[:, :, 0] * mask
     segmentation[:, :, 1] = segmentation[:, :, 1] * mask
-    return segmentation
+    segmentation[segmentation > 255] = 255
+    return segmentation.astype("uint8")

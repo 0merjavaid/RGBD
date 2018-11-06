@@ -28,15 +28,36 @@ def main():
         color_frame, aligned_depth_frame = get_aligned_frames(pipeline, align)
         if not aligned_depth_frame or not color_frame:
             continue
+        start_time=time.time()
         frame, depth_image = convert_to_numpy(color_frame, aligned_depth_frame)
-        original_image = frame.copy()
+        original_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
         seg_mask = segment_hand(frame, transform, seg_model)
         contours = get_contours(seg_mask)
         masked_frame = mask_frame(original_image, seg_mask)
-        draw_contours(masked_frame, contours)
-
+        bounding_box, hand_contour = draw_contours(masked_frame, contours)
+        mask_ioi = get_mask_ioi(depth_image, bounding_box, 70, hand_contour)
+        #median_depth= get_median_depth(np.array(bounding_box).reshape(4,),depth_image)
         # Display frame
-        cv2.imshow('window', masked_frame.astype("uint8"))
+        print (mask_ioi.shape, masked_frame.shape)
+
+        masked_frame[:, :, 0] *= mask_ioi
+        masked_frame[:, :, 1] *= mask_ioi
+        masked_frame[:, :, 2] *= mask_ioi
+        ioi_candidates = get_contours(mask_ioi*255)
+        center_x, center_y = int(
+            (bounding_box[2]+bounding_box[0])/2), int((bounding_box[1]+bounding_box[3])/2)
+        ioi = get_filtered_ioi(ioi_candidates, (center_x, center_y))
+        ioi_mask = draw_ioi(frame, ioi)
+        overlay_mask=ioi_mask.copy()
+        overlay_mask[overlay_mask==1]=3
+        overlay_mask[overlay_mask==0]=1
+        overlay_image=original_image.copy().astype(float)*overlay_mask
+        overlay_image[overlay_image>255]=255
+        overlay_image[:,:,:2]=original_image[:,:,:2].copy()
+        two_way_show=np.concatenate((overlay_image,original_image*ioi_mask),axis=1)
+        print (time.time()-start_time,"total time per frame")
+        cv2.imshow("image", masked_frame.astype("uint8"))
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
