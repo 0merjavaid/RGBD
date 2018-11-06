@@ -8,12 +8,12 @@ import pyrealsense2 as rs
 import math
 from unet import Unet34
 
-RGB_IMAGE_WIDTH = 1280
-RGB_IMAGE_HEIGHT = 720
+RGB_IMAGE_WIDTH = 848
+RGB_IMAGE_HEIGHT = 480
 
-DEPTH_IMAGE_WIDTH = 848
-DEPTH_IMAGE_HEIGHT = 480
-FPS = 30
+DEPTH_IMAGE_WIDTH = 640
+DEPTH_IMAGE_HEIGHT = 360
+FPS = 60
 
 
 def get_base():
@@ -88,7 +88,7 @@ def draw_contours(image, contours):
     hand_contour = None
     for contour in contours:
         area = get_contour_area(contour)
-        if area > 10000:
+        if area > 8000:
             x, y, w, h = draw_rect_around_contour(image, contour)
             hand_contour = np.array(contour)
     return np.array([x, y, w, h]), hand_contour
@@ -96,19 +96,34 @@ def draw_contours(image, contours):
 
 def get_filtered_ioi(ioi_candidates, point):
     for ioi_candidate in ioi_candidates:
-        print (point, "point", type(point))
         if cv2.pointPolygonTest(ioi_candidate, point, False) > 0:
             return ioi_candidate
 
 
 def draw_ioi(image, contour):
     mask = np.zeros_like(image)
-    print (contour)
     if contour is not None:
         cv2.drawContours(mask, [contour], -1, (1, 1, 1), -1)
 
     return mask
 
+def get_median_depth_contour(contour, depth_frame):
+    """
+    Calcuates the median depth associated with hand boundingbox
+    :param box: np.ndarry bounding box 
+    :praram depth_frame: numpy.ndarray depth image
+    :return: median depth associated with hand boundingbox
+    """
+    assert isinstance(box, np.ndarray)
+    assert isinstance(depth_frame, np.ndarray)
+
+    x1, y1, x2, y2 = box
+    depth_crop = depth_frame[y1:y2, x1:x2]
+
+    depth_crop = depth_crop[depth_crop>0]
+    median_depth = np.median(depth_crop.reshape(-1))
+    print ("median depth",median_depth)
+    return median_depth
 
 def get_median_depth(box, depth_frame):
     """
@@ -122,11 +137,14 @@ def get_median_depth(box, depth_frame):
 
     x1, y1, x2, y2 = box
     depth_crop = depth_frame[y1:y2, x1:x2]
+
+    depth_crop = depth_crop[depth_crop>0]
     median_depth = np.median(depth_crop.reshape(-1))
+    print ("median depth",median_depth)
     return median_depth
 
 
-def get_mask_ioi(depth_map, box, thres=50, hand_contour=None):
+def get_mask_ioi(depth_map,mask, thres=50, hand_contour=None):
     """
     Create a segmentation mask for item within the box
     :param image: np.ndarray rgb image
@@ -136,13 +154,13 @@ def get_mask_ioi(depth_map, box, thres=50, hand_contour=None):
     """
 
     assert isinstance(depth_map, np.ndarray)
-    assert isinstance(box, np.ndarray)
-
-    x1, y1, x2, y2 = box
-    median_depth = get_median_depth(box, depth_map)
-
-    mask_image = depth_map.copy()
-
+    #assert isinstance(box, np.ndarray)
+    white_areas=np.where(mask==1)
+    median_mask= depth_map[white_areas[0],white_areas[1]]#=125
+    median_mask=median_mask[median_mask>0]
+    median_depth=np.median(median_mask)
+    print (median_depth,"median_depth")
+    mask_image = depth_map.copy()   
     if math.isnan(median_depth):
         return np.zeros_like(mask_image)
 
@@ -153,7 +171,6 @@ def get_mask_ioi(depth_map, box, thres=50, hand_contour=None):
         hand_contour = hand_contour.reshape(-1, 2)
         y_min = np.min(hand_contour[:, 1])
         mask_image[:y_min, :] = 0
-
     return mask_image
 
 
@@ -213,7 +230,6 @@ def get_aligned_frames(pipeline, align):
     :return: color frame and aligned depth frame
     """
     frames = pipeline.wait_for_frames()
-    print('frames')
 
     # Align the depth frame to color frame
     aligned_frames = align.process(frames)
@@ -258,20 +274,29 @@ def segment_hand(image, transform, seg_model):
     :return: binary segmentation mask
     """
     img_height, img_width, _ = image.shape
-
+    before_pil = time.time()
     image = to_PIL(image)
+    after_pil = time.time()
     # Image to feed into the model
     image = transform(image)
+    after_transform = time.time()
     image_tensor = torch.unsqueeze(image, 0).cuda()
+    after_image_tensor = time.time()
 
     # Get binary mask from the image
     seg_mask = seg_model(image_tensor)
+    after_model = time.time()
     seg_mask = seg_mask.cpu().detach().numpy().squeeze(0)
+    end = time.time()
+ 
+    seg_mask = cv2.resize(seg_mask, (img_width, img_height))
     seg_mask[seg_mask > 0] = 1
     seg_mask[seg_mask < 0] = 0
 
-    # Resize to captured image
-    seg_mask = cv2.resize(seg_mask, (img_width, img_height))
+    """print ("To Pil: ", after_pil-before_pil, " After Transform: ", after_transform -
+                       after_pil, " after tensor: ", after_image_tensor-after_transform, "FP: ",
+                       after_model-after_image_tensor, " End: ", end-after_model, " Total: ",
+                       end-before_pil)"""
     return seg_mask
 
 
@@ -283,6 +308,7 @@ def mask_frame(image, mask):
     :return: image containing the segmentated hand
     """
     # For segmentation mask display
+    #mask=mask.copy()
     mask[mask == 1] = 2
     mask[mask == 0] = 1
 
