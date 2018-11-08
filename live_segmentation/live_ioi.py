@@ -86,9 +86,7 @@ def main():
         overlay_image[overlay_image > 255] = 255
         overlay_image[:, :, :2] = original_image[:, :, :2].copy()
         two_way_show = np.concatenate(
-        (ove
-            rlay_image, original_image*i
-            oi_mask), axis=1)
+        (overlay_image, original_image*ioi_mask), axis=1)
         cv2.imshow("ismage",two_way_show.astype("uint8"))
        
         key = cv2.waitKey(1)
