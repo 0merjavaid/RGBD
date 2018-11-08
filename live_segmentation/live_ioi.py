@@ -24,7 +24,7 @@ def main():
     pipeline, align = get_depth_pipeline()
 
     ret = True
-    i=0
+    i =0
     while ret: 
         i+=1 
      
