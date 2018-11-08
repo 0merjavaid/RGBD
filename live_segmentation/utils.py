@@ -76,31 +76,55 @@ def get_contour_area(contour):
     return cv2.contourArea(contour)
 
 
-def draw_contours(image, contours):
+def refine_contours(contours,area=1000):
     """
     Draw bounding box around contour
     :param image: input image to draw boxes on
     :param contours: contours around which bounding box will be drawn
     :return: (X,y,w,h) of the last contour
-    """
-    assert isinstance(image, np.ndarray), 'Image should be a numpy array'
+    """ 
+    assert isinstance(contours,list)
+    assert isinstance(area, (int,float))
     x, y, w, h = 0, 0, 0, 0
     hand_contour = None
+    max_contour_dict=dict()
     for contour in contours:
-        area = get_contour_area(contour)
-        if area > 8000:
-            x, y, w, h = draw_rect_around_contour(image, contour)
+        cnt_area = get_contour_area(contour)
+        if cnt_area > area:
+            x, y, w, h = get_rect_around_contour(contour)
             hand_contour = np.array(contour)
+            max_contour_dict[cnt_area]=(np.array([x,y,w,h]),hand_contour)
+    if len(max_contour_dict.keys())>0:
+        max_area=max(max_contour_dict.keys())
+        return max_contour_dict[max_area]
+    
     return np.array([x, y, w, h]), hand_contour
+
+def get_rect_around_contour(contour):
+    """
+    Draws a bounding box given a contour
+    :param image: input image to draw bouding box
+    :param contour: contour data points
+    :return: (x,y,w,h) of the box drawn
+    """
+    assert isinstance(contour, np.ndarray), 'contour should be a numpy array' 
+    (x, y, w, h) = cv2.boundingRect(contour)
+    return x, y, w+x, h+y
+
 
 
 def get_filtered_ioi(ioi_candidates, point):
+    assert isinstance(ioi_candidates, list)
+    assert isinstance(point,tuple)
+
     for ioi_candidate in ioi_candidates:
         if cv2.pointPolygonTest(ioi_candidate, point, False) > 0:
             return ioi_candidate
+    return None
 
-
-def draw_ioi(image, contour):
+def fill_ioi(image, contour):
+    assert isinstance(image, np.ndarray)
+    assert isinstance(contour, np.ndarray)
     mask = np.zeros_like(image)
     if contour is not None:
         cv2.drawContours(mask, [contour], -1, (1, 1, 1), -1)
@@ -125,24 +149,28 @@ def get_median_depth_contour(contour, depth_frame):
     print ("median depth",median_depth)
     return median_depth
 
-def get_median_depth(box, depth_frame):
+def get_median_depth(mask, depth_map):
     """
     Calcuates the median depth associated with hand boundingbox
     :param box: np.ndarry bounding box 
     :praram depth_frame: numpy.ndarray depth image
     :return: median depth associated with hand boundingbox
     """
-    assert isinstance(box, np.ndarray)
-    assert isinstance(depth_frame, np.ndarray)
+    assert isinstance(mask, np.ndarray)
+    assert isinstance(depth_map, np.ndarray)
+    assert len(depth_map.shape)==2
 
-    x1, y1, x2, y2 = box
-    depth_crop = depth_frame[y1:y2, x1:x2]
-
-    depth_crop = depth_crop[depth_crop>0]
-    median_depth = np.median(depth_crop.reshape(-1))
-    print ("median depth",median_depth)
+    white_areas=np.where(mask==1)
+    median_mask= depth_map[white_areas[0],white_areas[1]]#=125
+    median_mask=median_mask[median_mask>0]
+    median_depth=np.median(median_mask)
+     
     return median_depth
 
+def get_bbox_center(box):
+    assert isinstance(box, np.ndarray)
+    assert box.shape==(4,)
+    return int((box[2]+box[0])/2), int((box[1]+box[3])/2)
 
 def get_mask_ioi(depth_map,mask, thres=50, hand_contour=None):
     """
@@ -155,11 +183,9 @@ def get_mask_ioi(depth_map,mask, thres=50, hand_contour=None):
 
     assert isinstance(depth_map, np.ndarray)
     #assert isinstance(box, np.ndarray)
-    white_areas=np.where(mask==1)
-    median_mask= depth_map[white_areas[0],white_areas[1]]#=125
-    median_mask=median_mask[median_mask>0]
-    median_depth=np.median(median_mask)
-    print (median_depth,"median_depth")
+   
+    median_depth=get_median_depth(mask,depth_map)
+    
     mask_image = depth_map.copy()   
     if math.isnan(median_depth):
         return np.zeros_like(mask_image)
@@ -174,20 +200,6 @@ def get_mask_ioi(depth_map,mask, thres=50, hand_contour=None):
     return mask_image
 
 
-def draw_rect_around_contour(image, contour):
-    """
-    Draws a bounding box given a contour
-    :param image: input image to draw bouding box
-    :param contour: contour data points
-    :return: (x,y,w,h) of the box drawn
-    """
-    assert isinstance(contour, np.ndarray), 'contour should be a numpy array'
-    assert isinstance(image, np.ndarray), 'Image should be a numpy array'
-    assert len(image.shape) == 3, f'Image should have three channels, got {len(image.shape)} channels'
-
-    (x, y, w, h) = cv2.boundingRect(contour)
-    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    return x, y, w+x, h+y
 
 
 def get_depth_pipeline():
@@ -240,6 +252,10 @@ def get_aligned_frames(pipeline, align):
 
     return color_frame, aligned_depth_frame
 
+def binarize(seg_mask,thres=0.5):
+    seg_mask[seg_mask>thres]=1
+    seg_mask[seg_mask<=thres]=0
+    return seg_mask
 
 def convert_to_numpy(color_frame, aligned_depth_frame):
     """
@@ -260,6 +276,7 @@ def to_PIL(frame):
     :param frame: Input frame to be converted to PIL
     :return: PIL Image
     """
+    assert isinstance(frame,np.ndarray)
     image = Image.fromarray(frame)
     image = image.convert('RGB')
     return image
@@ -273,6 +290,7 @@ def segment_hand(image, transform, seg_model):
     :param seg_model: segmentation model
     :return: binary segmentation mask
     """
+    assert isinstance(image, np.ndarray)
     img_height, img_width, _ = image.shape
     before_pil = time.time()
     image = to_PIL(image)
@@ -284,19 +302,13 @@ def segment_hand(image, transform, seg_model):
     after_image_tensor = time.time()
 
     # Get binary mask from the image
-    seg_mask = seg_model(image_tensor)
-    after_model = time.time()
-    seg_mask = seg_mask.cpu().detach().numpy().squeeze(0)
-    end = time.time()
+    seg_mask = seg_model(image_tensor) 
+    seg_mask = seg_mask.cpu().detach().numpy().squeeze(0) 
  
     seg_mask = cv2.resize(seg_mask, (img_width, img_height))
     seg_mask[seg_mask > 0] = 1
     seg_mask[seg_mask < 0] = 0
-
-    """print ("To Pil: ", after_pil-before_pil, " After Transform: ", after_transform -
-                       after_pil, " after tensor: ", after_image_tensor-after_transform, "FP: ",
-                       after_model-after_image_tensor, " End: ", end-after_model, " Total: ",
-                       end-before_pil)"""
+ 
     return seg_mask
 
 
@@ -309,6 +321,7 @@ def mask_frame(image, mask):
     """
     # For segmentation mask display
     #mask=mask.copy()
+
     mask[mask == 1] = 2
     mask[mask == 0] = 1
 
@@ -320,3 +333,45 @@ def mask_frame(image, mask):
     segmentation[:, :, 1] = segmentation[:, :, 1] * mask
     segmentation[segmentation > 255] = 255
     return segmentation.astype("uint8")
+
+def width_points(mask ,center_x, center_y):
+    """
+    :param mask: binary mask to track values
+    :param array: Input array
+    :param point: row_point
+    """ 
+    assert isinstance(mask, np.ndarray)
+    assert isinstance(center_x, int)
+    assert isinstance(center_y, int)
+    mask=mask.copy()
+    left_black_max,right_black_min=None,None
+
+    if center_x != 0 and center_y != 0:
+        if center_y>=mask.shape[0]-1:
+            center_y=mask.shape[0]-1
+        mask = mask.copy()
+        black_points_left = np.where(mask[center_y,:center_x] == 0)
+        black_points_right = np.where(mask[center_y,center_x:]==0)
+        if black_points_left[0].size != 0 and black_points_right[0].size != 0:
+            left_black_max = np.max(black_points_left[0])
+            right_black_min = np.min(black_points_right[0]) + center_x
+
+    return left_black_max, right_black_min
+
+def get_multiple_widths(mask,center_x,center_y,height,number_of_points=10,gradient_thres=50):
+    if height<number_of_points:
+        print("ERROR: height < number of points")
+        return mask.shape[0]-1
+    jump_size=int(height/number_of_points)
+    prev_width=0
+    for i in range(number_of_points):
+        left,right=width_points(mask,center_x,center_y+(jump_size*i))
+        if left is None or right is None:
+            return mask.shape[0]-1
+        width=abs(left-right)
+        if ((width-prev_width)>gradient_thres and prev_width!=0):
+             
+            return center_y+(jump_size*i)+50
+        prev_width=width
+    return mask.shape[0]-1
+        
