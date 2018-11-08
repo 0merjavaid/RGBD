@@ -14,8 +14,11 @@ def main():
     # Init YOLO model
     YOLO = yolo.YOLO()
 
-    try:
+    try:    
+        i=0
         while True:
+            print ("frame ",i)
+            i+=1
             import time
             start = time.time()
             # Get frameset of color and depth
@@ -30,7 +33,7 @@ def main():
             
             # Apply YOLO to this image and get bounding boxes
             hands, items = YOLO.get_item_of_interest(color_image)
-            result = run(hands,items)
+            result = box_iou(hands,items)
             
             # get hand centroid
             hand_centroids = []
@@ -55,9 +58,9 @@ def main():
                 final_box = get_item_of_interest(hand_centroids, item_centroids, threshold=threshold)
                 if final_box is not None:
                     color_image_ioi = draw_boundingBox(color_image_ioi, final_box, box_color=(0,0,0), box_thickness=4)              
-            print(time.time() - start)
-            show_image('yolo', color_image)
-            show_image('ioi', color_image_ioi)
+            #print(time.time() - start)
+            #show_image('yolo', color_image)
+            #show_image('ioi', color_image_ioi)
     finally:
         pipeline.stop()
 

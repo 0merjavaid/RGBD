@@ -14,6 +14,10 @@ def main():
 
     # Init YOLO model
     YOLO = yolo.YOLO()
+    # fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+    # out = cv2.VideoWriter(
+    #                  'video.avi',
+    #                 fourcc, 30, (1280, 720))
 
     try:
         while True:
@@ -25,12 +29,17 @@ def main():
                 continue
 
             color_image, depth_image = rgbd_to_numpy(color_frame, aligned_depth_frame)
-            color_image_ioi = color_image.copy()
+            color_image_ioi = color_image.copy() 
             mask = np.zeros_like(color_image_ioi[:,:,0])
+            show_image('yolo_ioi', color_image)
+            out.write(color_image)
+
+            continue
+
             
             # Apply YOLO to this image and get bounding boxes
             hands, items = YOLO.get_item_of_interest(color_image)
-            result = run(hands,items)
+            result = iou(hands,items)
             
             # get hand centroid
             hand_centroids = []
@@ -64,6 +73,7 @@ def main():
                     mask = mask_ioi(depth_image, final_box)
                     print(mask.shape)
                     print(color_image_ioi.shape)
+
             show_image('yolo_ioi', color_image_ioi)
             color_image_ioi[:,:,0] = color_image_ioi[:,:,0] * mask
             color_image_ioi[:,:,1] = color_image_ioi[:,:,1] * mask
