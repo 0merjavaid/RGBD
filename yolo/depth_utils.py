@@ -100,7 +100,7 @@ def rgbd_to_numpy(color_frame, depth_frame):
     return color_image, depth_image
 
 
-def run(bboxes1, bboxes2):
+def box_iou(bboxes1, bboxes2):
     """
     Calcualtes Intersection over Union (IOU) of the two list of bounding boxes
     :param bboxes1: List containing Bounding Boxes 1
@@ -207,7 +207,7 @@ def get_depth_diffs(hand, items_list):
         item_box = item[1]
 
         # Calculate IOU of hand with item
-        iou = run(np.array([hand_box]), np.array([item_box]))
+        iou = box_iou(np.array([hand_box]), np.array([item_box]))
 
         if iou > 0:
             depth_diff = abs(hand_depth - item_depth)

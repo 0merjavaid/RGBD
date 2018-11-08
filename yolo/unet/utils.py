@@ -85,7 +85,7 @@ def draw_contours(image, contours):
         area = get_contour_area(contour)
         if area > 10000:
             x, y, w, h = draw_rect_around_contour(image, contour)
-    return x, y, w, h
+    return x, y, w+x, h+y
 
 
 def draw_rect_around_contour(image, contour):
