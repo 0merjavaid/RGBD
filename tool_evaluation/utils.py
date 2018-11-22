@@ -14,7 +14,7 @@ RGB_IMAGE_HEIGHT = 480
 
 DEPTH_IMAGE_WIDTH = 640
 DEPTH_IMAGE_HEIGHT = 360
-FPS = 30
+FPS = 60
 
 
 def get_base():
@@ -163,7 +163,6 @@ def get_median_depth(mask, depth_map):
     assert isinstance(mask, np.ndarray)
     assert isinstance(depth_map, np.ndarray)
     assert len(depth_map.shape) == 2
-
     white_areas = np.where(mask == 1)
     median_mask = depth_map[white_areas[0], white_areas[1]]  # =125
     median_mask = median_mask[median_mask > 0]
@@ -233,6 +232,8 @@ def get_depth_pipeline():
     align_to = rs.stream.color
     align = rs.align(align_to)
 
+    align_to = rs.stream.color
+    align = rs.align(align_to)
     return pipeline, align
 
 
@@ -361,7 +362,7 @@ def width_points(mask, center_x, center_y):
 
 def get_multiple_widths(mask, center_x, center_y, height, number_of_points=10, gradient_thres=50):
     if height < number_of_points:
-        print("ERROR: height < number of points")
+        #print("ERROR: height < number of points")
         return mask.shape[0] - 1
     jump_size = int(height / number_of_points)
     prev_width = 0
