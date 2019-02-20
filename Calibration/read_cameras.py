@@ -6,18 +6,20 @@ import time
 
 class Realsense:
 
-    def __init__(self, depth_res, rgb_res, fps):
+    def __init__(self,camera_name, depth_res, rgb_res, fps):
         self.depth_res = depth_res
         self.rgb_res = rgb_res
         self.fps = fps
-        self.init_pipeline()
         self.cam_id = None
+        self.camera_name=camera_name
+        self.init_pipeline()
 
     def init_pipeline(self):
         try:
-            print ("WTF")
+             
             self.pipeline = rs.pipeline()
             config = rs.config()
+            config.enable_device(self.camera_name)
             config.enable_stream(
                 rs.stream.depth, self.depth_res[0], self.depth_res[1], rs.format.z16, self.fps)
             config.enable_stream(rs.stream.color, self.rgb_res[0],
@@ -26,8 +28,7 @@ class Realsense:
 
             align_to = rs.stream.color
             self.align = rs.align(align_to)
-            print ("Pipeline initialized")
-
+             
         except Exception as e:
             print (e)
 
@@ -72,20 +73,19 @@ class Realsense:
                        3: "Far Left", 4: "Far Right"}
         while True:
             color_frame, _ = next(self.get_frames())
-            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), color_frame.shape[0]/4),
+            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4)),
                           "Press 1 for near right cam")
-            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), color_frame.shape[0]/4 + 30),
+            self.put_text(color_frame, (int(color_frame.shape[1]/1.7),int( color_frame.shape[0]/4) + 30),
                           "Press 2 for near left cam")
-            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), color_frame.shape[0]/4 + 60),
+            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4) + 60),
                           "Press 3 for far left cam")
-            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), color_frame.shape[0]/4 + 90),
+            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4) + 90),
                           "Press 4 for far right cam")
 
             cv2.imshow("", color_frame)
             key = cv2.waitKey(1)
             assigned = False
             for i in range(1, 5):
-                print (key, ord(str(i)))
                 if key == ord(str(i)):
                     self.cam_id = i
                     assigned = True
@@ -94,7 +94,7 @@ class Realsense:
                 break
 
         self.put_text(color_frame, (int(
-            color_frame.shape[1]/2.3), color_frame.shape[0]/4+200), cam_mapping[self.cam_id]+" Assigned")
+            color_frame.shape[1]/2.3), int(color_frame.shape[0]/4)+200), cam_mapping[self.cam_id]+" Assigned")
         cv2.imshow("", color_frame)
         cv2.waitKey()
 
