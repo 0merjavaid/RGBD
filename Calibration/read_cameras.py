@@ -6,17 +6,17 @@ import time
 
 class Realsense:
 
-    def __init__(self,camera_name, depth_res, rgb_res, fps):
+    def __init__(self, camera_name, depth_res, rgb_res, fps):
         self.depth_res = depth_res
         self.rgb_res = rgb_res
         self.fps = fps
         self.cam_id = None
-        self.camera_name=camera_name
+        self.camera_name = camera_name
         self.init_pipeline()
 
     def init_pipeline(self):
         try:
-             
+
             self.pipeline = rs.pipeline()
             config = rs.config()
             config.enable_device(self.camera_name)
@@ -28,7 +28,7 @@ class Realsense:
 
             align_to = rs.stream.color
             self.align = rs.align(align_to)
-             
+
         except Exception as e:
             print (e)
 
@@ -75,7 +75,7 @@ class Realsense:
             color_frame, _ = next(self.get_frames())
             self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4)),
                           "Press 1 for near right cam")
-            self.put_text(color_frame, (int(color_frame.shape[1]/1.7),int( color_frame.shape[0]/4) + 30),
+            self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4) + 30),
                           "Press 2 for near left cam")
             self.put_text(color_frame, (int(color_frame.shape[1]/1.7), int(color_frame.shape[0]/4) + 60),
                           "Press 3 for far left cam")

@@ -29,57 +29,81 @@ class Calibrate:
                 return False
 
 
+def get_regions_depth(depth_frame, plane_points, plane_height, col_intervals):
+    cols = int(depth_frame.shape[1]/col_intervals)
+    cols_depths = np.zeros(
+        (len(plane_points), col_intervals, plane_height, cols))
+    non_zeros = np.zeros((len(plane_points), col_intervals))
+
+    for i in range(len(plane_points)):
+
+        cols_depths[i] =\
+            np.array([depth_frame[plane_points[i]:plane_points[
+                     i]+plane_height, cols*j:cols*(j+1)]
+                for j in range(col_intervals)]).squeeze()
+
+        non_zeros[i] = np.array([np.count_nonzero(cols_depths[i, j])
+                                 for j in range(col_intervals)])
+
+    cols_depths = np.sum(
+        cols_depths.reshape(len(plane_points), col_intervals, -1), -1)/non_zeros
+
+    return cols_depths
+
+
+def mask_inturrept(image, indexes, box_height, box_width):
+
+    for i in indexes[0]:
+        for j in indexes[1]:
+            y1, y2, x1, x2 = i * \
+                box_height, (i*box_height)+box_height, j * \
+                box_width, (j*box_width)+box_width
+            print (y1, y2, x1, x2)
+            image[y1:y2, x1:x2] = [0, 255, 0]
+    return image
+
+
 def plane_inturrept():
     cam_name = rs.context().devices[0].get_info(
         rs.camera_info.serial_number)
     print (cam_name)
     camera = Realsense(cam_name, (640, 360), (848, 480), 30)
 
-    i = 0
+    buffer_counter = 0
     f1, s1, t1 = 0, 0, 0
-    interval = 10
-    quartile_boundary = np.zeros((interval,))
-    quartile = int(848/interval)
+    col_intervals = 10
+    row_intervals = 5
+    cols_boundary = np.zeros((col_intervals,))
+    cols = int(848/col_intervals)
+    rows = int(480/row_intervals)
     thres = 10
-    plane_point = 50
+    plane_points = [rows*(i+1) for i in range(row_intervals-1)]
+    buffer_size = 3
     plane_height = 5
-    buffer_depths = np.zeros((interval, 5))
+    buffer_depths = np.zeros((buffer_size, row_intervals-1,  col_intervals))
     while True:
-        i += 1
+        buffer_counter += 1
         color_frame, depth_frame = next(camera.get_frames())
         depth_frame[depth_frame > 1000] = 1000
         depth_frame = (depth_frame.astype(float)*255/1000).astype("uint8")
         depth_frame = cv2.GaussianBlur(depth_frame, (5, 5), 0)
 
-        quartile_depths =\
-            np.array([depth_frame[plane_point:plane_point+plane_height,
-                                  quartile*j:quartile*(j+1)]
-                      for j in range(interval)]).squeeze()
+        cols_depths = get_regions_depth(
+            depth_frame, plane_points, plane_height, col_intervals)
 
-        non_zeros = np.array([np.count_nonzero(quartile_depths[j])
-                              for j in range(interval)])
-
-        quartile_depths = np.sum(
-            quartile_depths.reshape(interval, -1), -1)/non_zeros
-
-        if i < 10:
+        if buffer_counter < 10:
             buffer_depths = np.array(buffer_depths)
-            buffer_depths = [np.concatenate(
-                ([quartile_depths[j]], buffer_depths[j, 0:-1])) for j in range(interval)]
+            buffer_depths = np.concatenate(
+                (cols_depths.reshape(1, row_intervals-1, -1), buffer_depths[0:-1, ]), axis=0)
 
-            quartile_boundary = [np.mean(buffer_depths[j])
-                                 for j in range(interval)]
+        cols_boundary = np.mean(buffer_depths, 0)
 
-        diffs = np.array([np.abs(d1-d2)
-                          for d1, d2 in zip(quartile_boundary, quartile_depths)])
+        diffs = abs(cols_depths-cols_boundary)
         difference_detected = np.where(diffs > thres)
 
         if len(difference_detected[0]) > 0:
-            pass
-            print difference_detected,
-            print
-        depth_frame[plane_point:plane_point+plane_height] = 255
-        cv2.imshow("", depth_frame)
+            mask_inturrept(color_frame, difference_detected, rows, cols)
+        cv2.imshow("", color_frame)
         key = cv2.waitKey(1)
         if key == ord("q"):
             break
