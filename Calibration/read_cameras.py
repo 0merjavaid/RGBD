@@ -6,24 +6,44 @@ import time
 
 class Realsense:
 
-    def __init__(self, camera_name, depth_res, rgb_res, fps):
+    def __init__(self, camera_name, depth_res, rgb_res, fps, rgb=False, bag=False):
         self.depth_res = depth_res
         self.rgb_res = rgb_res
         self.fps = fps
         self.cam_id = None
         self.camera_name = camera_name
-        self.init_pipeline()
+        self.init_pipeline(rgb, bag)
 
-    def init_pipeline(self):
+    def get_devices(self):
+        ctx = rs.context()
+        devices_list = []
+        for d in ctx.devices:
+            if d.get_info(rs.camera_info.name) == "Intel RealSense D435":
+                devices_list.append(d.get_info(rs.camera_info.serial_number))
+        print (len(devices_list), " Cameras Connected")
+        print (devices_list)
+        cameras = [Realsense(i, depth_res, rgb_res, fps) for i in devices_list]
+        return cameras
+
+    def init_pipeline(self, rgb, bag):
         try:
 
             self.pipeline = rs.pipeline()
             config = rs.config()
-            config.enable_device(self.camera_name)
+
+            if (bag):
+                rs.config.enable_device_from_file(
+                    config, self.camera_name, False)
+            else:
+                config.enable_device(self.camera_name)
             config.enable_stream(
                 rs.stream.depth, self.depth_res[0], self.depth_res[1], rs.format.z16, self.fps)
-            config.enable_stream(rs.stream.color, self.rgb_res[0],
-                                 self.rgb_res[1], rs.format.bgr8, self.fps)
+            if rgb:
+                config.enable_stream(rs.stream.color, self.rgb_res[0],
+                                     self.rgb_res[1], rs.format.rgb8, self.fps)
+            else:
+                config.enable_stream(rs.stream.color, self.rgb_res[0],
+                                     self.rgb_res[1], rs.format.bgr8, self.fps)
             profile = self.pipeline.start(config)
 
             align_to = rs.stream.color
@@ -67,6 +87,16 @@ class Realsense:
                     fontScale,
                     fontColor,
                     lineType)
+
+    def show_image(self, image, depth=False):
+        if depth:
+            image = (image.astype(float)*255/np.max(image))
+
+        cv2.imshow("image", image.astype("uint8"))
+        key = cv2.waitKey()
+        if key == ord("q"):
+            cv2.destroyAllWindows()
+            return False
 
     def assign_cam_id(self):
         cam_mapping = {1: "Near Right", 2: "Near Left",
