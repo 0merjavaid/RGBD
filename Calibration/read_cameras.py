@@ -93,10 +93,12 @@ class Realsense:
             image = (image.astype(float)*255/np.max(image))
 
         cv2.imshow("image", image.astype("uint8"))
-        key = cv2.waitKey()
+        key = cv2.waitKey(1)
         if key == ord("q"):
             cv2.destroyAllWindows()
             return False
+        else:
+            return True
 
     def assign_cam_id(self):
         cam_mapping = {1: "Near Right", 2: "Near Left",
