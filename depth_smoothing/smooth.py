@@ -21,13 +21,12 @@ class Smoother:
 
         #depth_image1 = ndimage.grey_dilation(depth_image, size=(5, 5), structure=np.ones((5, 5)))
         #depth_image1 = cv2.equalizeHist(depth_image)
-        depth_image1 = ndimage.grey_dilation(
-            depth_image, size=(5, 5), structure=np.ones((5, 5)))
-        depth_image1 = cv2.medianBlur(depth_image1, 5)
+        # depth_image1 = ndimage.grey_dilation(
+        #     depth_image, size=(5, 5), structure=np.ones((5, 5)))
 
         kernel = np.array([-1, -1, -1, -1, 9, -1, -1, -1, -1]).reshape(3, 3)
 
-        depth_image1 = cv2.filter2D(depth_image1, -1, kernel)
+        depth_image1 = cv2.filter2D(depth_image, -1, kernel)
 
         smooth = cv2.applyColorMap(depth_image1, cv2.COLORMAP_JET)
 
