@@ -23,7 +23,7 @@ def get_pipeline(directory, rgb_res=(848, 480), depth_res=(640, 360), fps=30):
     align = rs.align(align_to)
     return pipeline, config, align
 
-def fuck():
+def process():
     try:
         pipeline,config,align= get_pipeline("/home/haroonrashid/omer/fovea/data/videos/cam1.bag", rgb_res=(848, 480), depth_res=(640, 360), fps=30)
     
@@ -129,4 +129,4 @@ def main():
                             crop_save_dir, rgb_res, depth_res)
 
 if __name__ == "__main__":
-    fuck()
+    main()
